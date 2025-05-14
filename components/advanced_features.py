@@ -197,11 +197,25 @@ class AdvancedFeatures:
         1. Summary
         2. Key Characters (name, description, significance)
         3. Major Themes (name, explanation, textual evidence)
-        4. Important Symbols (symbol, meaning, occurrences)
+        4. Important Symbols (for each symbol, use its actual name/object as the key, not "Symbol 1", "Symbol 2", etc. Include meaning and occurrences)
         5. Discussion Questions (at least 5 thought-provoking questions)
         6. Key Passages (passage text, page/location, significance)
         7. Historical Context (relevant historical information)
         8. Critical Perspectives (different ways to interpret the text)
+        
+        For the Important Symbols section, use the actual symbol names as keys. For example:
+        {{
+            "Important Symbols": {{
+                "The White Whale": {{
+                    "meaning": "Represents the unknowable and nature's power",
+                    "occurrences": "Appears throughout the novel as Ahab's obsession"
+                }},
+                "The Sea": {{
+                    "meaning": "Symbolizes both life and death",
+                    "occurrences": "Present in all major scenes"
+                }}
+            }}
+        }}
         
         Output only valid JSON without explanation."""
         

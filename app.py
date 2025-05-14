@@ -13,6 +13,7 @@ from components.knowledge_retriever import KnowledgeRetriever
 from components.ui_components import setup_ui, display_response
 from components.advanced_features import AdvancedFeatures
 from components.visualizations import LiteraryVisualizations
+from components.text_retriever import TextRetriever
 
 # Set page configuration
 st.set_page_config(page_title="READR: Literary Companion", layout="wide")
@@ -22,7 +23,7 @@ setup_ui()
 
 # Initialize session state
 if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": "Welcome to READR! Please upload a literary text to begin exploring."}]
+    st.session_state["messages"] = [{"role": "assistant", "content": "Welcome to READR! Please enter a book or literary source to begin exploring."}]
 
 if "document_processor" not in st.session_state:
     st.session_state["document_processor"] = DocumentProcessor()
@@ -39,6 +40,9 @@ if "advanced_features" not in st.session_state:
 if "visualizations" not in st.session_state:
     st.session_state["visualizations"] = LiteraryVisualizations()
     
+if "text_retriever" not in st.session_state:
+    st.session_state["text_retriever"] = TextRetriever()
+    
 if "current_tab" not in st.session_state:
     st.session_state["current_tab"] = "Chat"
     
@@ -51,63 +55,100 @@ if "visualization_data" not in st.session_state:
 if "reading_position" not in st.session_state:
     st.session_state["reading_position"] = 0
 
+if "combined_text" not in st.session_state:
+    st.session_state["combined_text"] = ""
+
+if "source_metadata" not in st.session_state:
+    st.session_state["source_metadata"] = {}
+
+if "knowledge_base" not in st.session_state:
+    st.session_state["knowledge_base"] = None
+
 # Main tabs
 tab1, tab2, tab3, tab4 = st.tabs(["Chat", "Visualizations", "Study Guide", "Reading Mode"])
 
-# File uploader in sidebar
+# Text input in sidebar
 with st.sidebar:
-    st.header("Upload Literary Text")
-    uploaded_files = st.file_uploader(
-        "Choose a file", 
-        type=["txt", "pdf"], 
-        accept_multiple_files=True
+    st.header("Enter Literary Source")
+    source_query = st.text_input(
+        "Enter book title or literary source",
+        placeholder="e.g., The Great Gatsby, Moby Dick, etc."
     )
     
-    if uploaded_files:
-        # Process uploaded documents
-        document_processor = st.session_state["document_processor"]
-        knowledge_base = document_processor.process_documents(uploaded_files)
-        st.session_state["knowledge_base"] = knowledge_base
+    # Optional Google Books API key
+    google_books_api_key = st.text_input(
+        "Google Books API Key (optional)",
+        type="password",
+        help="Enter your Google Books API key to enable book content retrieval"
+    )
+    
+    # Analysis options
+    st.header("Analysis Options")
+    analysis_type = st.selectbox(
+        "Select analysis focus:",
+        ["General", "Historical Context", "Character Analysis", "Symbolism", "Themes", "Literary Techniques"]
+    )
+    st.session_state["analysis_type"] = analysis_type
+    
+    # Advanced options
+    st.header("Advanced Features")
+    generate_study_guide = st.button("Generate Study Guide", disabled=not st.session_state.get("combined_text"))
+    generate_visualizations = st.button("Generate Visualizations", disabled=not st.session_state.get("combined_text"))
+
+# Process text retrieval when source query changes
+if source_query and source_query != st.session_state.get("last_query", ""):
+    st.session_state["last_query"] = source_query
+    
+    # Reset all state variables for the new book
+    st.session_state["messages"] = [{"role": "assistant", "content": f"Welcome to READR! I've loaded {source_query}. What would you like to know about it?"}]
+    st.session_state["study_guide"] = None
+    st.session_state["visualization_data"] = None
+    st.session_state["reading_position"] = 0
+    st.session_state["combined_text"] = ""
+    st.session_state["source_metadata"] = {}
+    st.session_state["knowledge_base"] = None
+    
+    # Retrieve text from external sources
+    with st.spinner("Retrieving content..."):
+        text_retriever = st.session_state["text_retriever"]
+        content, metadata = text_retriever.get_text(source_query, google_books_api_key)
         
-        # Extract combined text for visualizations and study guide
-        combined_text = ""
-        for uploaded_file in uploaded_files:
-            if uploaded_file.type == "application/pdf":
-                file_content = document_processor.extract_pdf_text(uploaded_file)
-            else:  # Assume text file
-                file_content = uploaded_file.read().decode("utf-8")
-            combined_text += file_content + "\n\n"
-        
-        st.session_state["combined_text"] = combined_text
-        
-        # Display document information
-        st.success(f"Processed {len(uploaded_files)} document(s)")
-        
-        # Analysis options
-        st.header("Analysis Options")
-        analysis_type = st.selectbox(
-            "Select analysis focus:",
-            ["General", "Historical Context", "Character Analysis", "Symbolism", "Themes", "Literary Techniques"]
+        if content:
+            # Process the retrieved text
+            document_processor = st.session_state["document_processor"]
+            knowledge_base = document_processor.process_text(content, metadata)
+            st.session_state["knowledge_base"] = knowledge_base
+            st.session_state["combined_text"] = content
+            st.session_state["source_metadata"] = metadata
+            
+            # Display source information
+            st.sidebar.success(f"Retrieved content from: {', '.join(metadata['sources'])}")
+        else:
+            st.sidebar.error("No content found for the given source. Please try a different search term.")
+            st.session_state["combined_text"] = ""
+            st.session_state["source_metadata"] = {}
+            st.session_state["knowledge_base"] = None
+
+# Handle study guide generation
+if generate_study_guide and st.session_state.get("combined_text"):
+    with st.spinner("Generating comprehensive study guide..."):
+        advanced_features = st.session_state["advanced_features"]
+        study_guide = advanced_features.generate_study_guide(st.session_state["combined_text"])
+        st.session_state["study_guide"] = study_guide
+        st.session_state["current_tab"] = "Study Guide"
+        st.rerun()
+
+# Handle visualization generation
+if generate_visualizations and st.session_state.get("combined_text"):
+    with st.spinner("Analyzing text and generating visualizations..."):
+        advanced_features = st.session_state["advanced_features"]
+        visualization_data = advanced_features.generate_literary_visualizations(
+            st.session_state["combined_text"], 
+            st.session_state.get("analysis_type", "General")
         )
-        st.session_state["analysis_type"] = analysis_type
-        
-        # Advanced options
-        st.header("Advanced Features")
-        if st.button("Generate Study Guide"):
-            with st.spinner("Generating comprehensive study guide..."):
-                advanced_features = st.session_state["advanced_features"]
-                study_guide = advanced_features.generate_study_guide(combined_text)
-                st.session_state["study_guide"] = study_guide
-                st.session_state["current_tab"] = "Study Guide"
-                st.rerun()
-        
-        if st.button("Generate Visualizations"):
-            with st.spinner("Analyzing text and generating visualizations..."):
-                advanced_features = st.session_state["advanced_features"]
-                visualization_data = advanced_features.generate_literary_visualizations(combined_text, analysis_type)
-                st.session_state["visualization_data"] = visualization_data
-                st.session_state["current_tab"] = "Visualizations"
-                st.rerun()
+        st.session_state["visualization_data"] = visualization_data
+        st.session_state["current_tab"] = "Visualizations"
+        st.rerun()
 
 # Tab 1: Chat Interface
 with tab1:
@@ -118,11 +159,11 @@ with tab1:
     # Chat input
     question = st.chat_input(
         "Ask about the literary text...",
-        disabled=not uploaded_files,
+        disabled=not st.session_state.get("combined_text"),
     )
     
     # Process question
-    if question and uploaded_files:
+    if question and st.session_state.get("combined_text"):
         # Add user question to chat history
         st.session_state.messages.append({"role": "user", "content": question})
         st.chat_message("user").write(question)
@@ -154,8 +195,8 @@ with tab1:
 with tab2:
     st.header("Literary Analysis Visualizations")
     
-    if not uploaded_files:
-        st.info("Please upload a literary text to generate visualizations.")
+    if not source_query:
+        st.info("Please enter a literary source to generate visualizations.")
     elif st.session_state["visualization_data"] is None:
         st.info("Click 'Generate Visualizations' in the sidebar to analyze the text.")
     else:
@@ -189,8 +230,8 @@ with tab2:
 
 # Tab 3: Study Guide
 with tab3:
-    if not uploaded_files:
-        st.info("Please upload a literary text to generate a study guide.")
+    if not source_query:
+        st.info("Please enter a literary source to generate a study guide.")
     elif st.session_state["study_guide"] is None:
         st.info("Click 'Generate Study Guide' in the sidebar to create a comprehensive study guide.")
     else:
@@ -202,25 +243,82 @@ with tab3:
 with tab4:
     st.header("Reading Mode")
     
-    if not uploaded_files:
-        st.info("Please upload a literary text to use Reading Mode.")
+    if not source_query:
+        st.info("Please enter a literary source to use Reading Mode.")
     else:
         combined_text = st.session_state["combined_text"]
+        source_metadata = st.session_state.get("source_metadata", {})
         
-        # Display text with progress tracking
-        st.subheader("Text")
-        text_container = st.container()
-        with text_container:
-            st.markdown(combined_text[:5000] + "..." if len(combined_text) > 5000 else combined_text)
+        # Create a container for the main content
+        main_content = st.container()
         
-        # Track reading progress
-        reading_position = st.slider("Reading Position", 0, len(combined_text), st.session_state["reading_position"])
-        st.session_state["reading_position"] = reading_position
+        with main_content:
+            # Display source information
+            if source_metadata:
+                st.subheader("Source Information")
+                if "wikipedia" in source_metadata:
+                    wiki = source_metadata["wikipedia"]
+                    st.markdown(f"**Wikipedia:** [{wiki['title']}]({wiki['url']})")
+                    st.markdown(wiki["summary"])
+                
+                if "google_books" in source_metadata:
+                    books = source_metadata["google_books"]
+                    st.markdown(f"**Google Books:** [{books['title']}]({books['preview_url']})")
+                    if books.get("authors"):
+                        st.markdown(f"Authors: {', '.join(books['authors'])}")
+            
+            # Display text with progress tracking
+            st.subheader("Text")
+            text_container = st.container()
+            with text_container:
+                # Calculate the visible portion of text based on reading position
+                chunk_size = 5000  # Number of characters to show at once
+                start_pos = max(0, st.session_state["reading_position"] - chunk_size // 2)
+                end_pos = min(len(combined_text), start_pos + chunk_size)
+                
+                # Display the current chunk of text
+                current_text = combined_text[start_pos:end_pos]
+                st.markdown(current_text)
+                
+                # Add navigation buttons
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col1:
+                    if st.button("Previous Section", disabled=start_pos == 0):
+                        st.session_state["reading_position"] = max(0, start_pos - chunk_size)
+                        st.rerun()
+                with col3:
+                    if st.button("Next Section", disabled=end_pos >= len(combined_text)):
+                        st.session_state["reading_position"] = min(len(combined_text), end_pos)
+                        st.rerun()
         
-        # Generate reading insights
-        if st.button("Get Reading Insights"):
-            with st.spinner("Analyzing your current reading position..."):
-                advanced_features = st.session_state["advanced_features"]
-                progress_data = advanced_features.track_reading_progress(combined_text, reading_position)
-                visualizations = st.session_state["visualizations"]
-                visualizations.display_reading_progress(progress_data)
+        # Create a fixed container at the bottom for progress tracking
+        st.markdown("---")  # Add a separator
+        progress_container = st.container()
+        with progress_container:
+            # Calculate progress percentage
+            progress_percentage = (st.session_state["reading_position"] / len(combined_text)) * 100 if combined_text else 0
+            
+            # Display progress information
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col1:
+                st.write(f"Progress: {progress_percentage:.1f}%")
+            with col2:
+                # Create a more precise progress slider
+                new_position = st.slider(
+                    "Reading Position",
+                    0,
+                    len(combined_text),
+                    st.session_state["reading_position"],
+                    key="reading_position_slider",
+                    label_visibility="collapsed"
+                )
+                if new_position != st.session_state["reading_position"]:
+                    st.session_state["reading_position"] = new_position
+                    st.rerun()
+            with col3:
+                if st.button("Get Reading Insights"):
+                    with st.spinner("Analyzing your current reading position..."):
+                        advanced_features = st.session_state["advanced_features"]
+                        progress_data = advanced_features.track_reading_progress(combined_text, st.session_state["reading_position"])
+                        visualizations = st.session_state["visualizations"]
+                        visualizations.display_reading_progress(progress_data)

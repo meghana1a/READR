@@ -75,13 +75,6 @@ with st.sidebar:
         placeholder="e.g., The Great Gatsby, Moby Dick, etc."
     )
     
-    # Optional Google Books API key
-    google_books_api_key = st.text_input(
-        "Google Books API Key (optional)",
-        type="password",
-        help="Enter your Google Books API key to enable book content retrieval"
-    )
-    
     # Analysis options
     st.header("Analysis Options")
     analysis_type = st.selectbox(
@@ -111,7 +104,7 @@ if source_query and source_query != st.session_state.get("last_query", ""):
     # Retrieve text from external sources
     with st.spinner("Retrieving content..."):
         text_retriever = st.session_state["text_retriever"]
-        content, metadata = text_retriever.get_text(source_query, google_books_api_key)
+        content, metadata = text_retriever.get_text(source_query)
         
         if content:
             # Process the retrieved text
@@ -203,30 +196,70 @@ with tab2:
         visualization_data = st.session_state["visualization_data"]
         visualizations = st.session_state["visualizations"]
         
-        # Determine what kind of visualization data we have
-        if "characters" in visualization_data:
+        # Display visualizations based on analysis type
+        analysis_type = st.session_state.get("analysis_type", "General")
+        
+        if analysis_type == "Character Analysis":
             st.subheader("Character Network")
             try:
-                character_fig = visualizations.character_network(visualization_data["characters"])
-                st.plotly_chart(character_fig, use_container_width=True)
+                if "characters" in visualization_data:
+                    character_fig = visualizations.character_network(visualization_data["characters"])
+                    st.plotly_chart(character_fig, use_container_width=True)
+                else:
+                    st.warning("No character data available for visualization.")
             except Exception as e:
                 st.error(f"Error generating character network: {str(e)}")
         
-        if "themes" in visualization_data:
+        elif analysis_type == "Themes":
             st.subheader("Theme Analysis")
             try:
-                theme_fig = visualizations.theme_radar_chart(visualization_data["themes"])
-                st.plotly_chart(theme_fig, use_container_width=True)
+                if "themes" in visualization_data:
+                    theme_fig = visualizations.theme_radar_chart(visualization_data["themes"])
+                    st.plotly_chart(theme_fig, use_container_width=True)
+                else:
+                    st.warning("No theme data available for visualization.")
             except Exception as e:
                 st.error(f"Error generating theme analysis: {str(e)}")
         
-        if "symbols" in visualization_data:
+        elif analysis_type == "Symbolism":
             st.subheader("Symbol Analysis")
             try:
-                symbol_fig = visualizations.symbol_bubble_chart(visualization_data["symbols"])
-                st.plotly_chart(symbol_fig, use_container_width=True)
+                if "symbols" in visualization_data:
+                    symbol_fig = visualizations.symbol_bubble_chart(visualization_data["symbols"])
+                    st.plotly_chart(symbol_fig, use_container_width=True)
+                else:
+                    st.warning("No symbol data available for visualization.")
             except Exception as e:
                 st.error(f"Error generating symbol analysis: {str(e)}")
+        
+        else:  # General analysis
+            # Try to display all available visualizations
+            if "characters" in visualization_data:
+                st.subheader("Character Network")
+                try:
+                    character_fig = visualizations.character_network(visualization_data["characters"])
+                    st.plotly_chart(character_fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error generating character network: {str(e)}")
+            
+            if "themes" in visualization_data:
+                st.subheader("Theme Analysis")
+                try:
+                    theme_fig = visualizations.theme_radar_chart(visualization_data["themes"])
+                    st.plotly_chart(theme_fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error generating theme analysis: {str(e)}")
+            
+            if "symbols" in visualization_data:
+                st.subheader("Symbol Analysis")
+                try:
+                    symbol_fig = visualizations.symbol_bubble_chart(visualization_data["symbols"])
+                    st.plotly_chart(symbol_fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error generating symbol analysis: {str(e)}")
+            
+            if not any(key in visualization_data for key in ["characters", "themes", "symbols"]):
+                st.warning("No visualization data available. Try selecting a specific analysis type.")
 
 # Tab 3: Study Guide
 with tab3:
